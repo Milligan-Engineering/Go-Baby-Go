@@ -3,7 +3,7 @@
 ## [3.02] (2020-11-15)
 
 ## Added
-* Set serial mintor outputs for acceleration and deceleration values
+* Set serial monitor outputs for acceleration and deceleration values
 * Refined functionality for acceleration input
 * Set the default acceleration value to 1 if 'USE_ACCELERATION_POT' is set to 'false'.
 
