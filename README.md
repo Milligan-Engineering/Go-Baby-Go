@@ -1,4 +1,4 @@
-# Go-Baby-Go
+# Go-Baby-Go: SCOOTYPUFF v.3
 Version 3
 For Milligan Engineering Go-Baby-Go Vehicles
 
