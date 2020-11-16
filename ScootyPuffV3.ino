@@ -1,32 +1,9 @@
-//#######################/#####################################################//
+//############################################################################//
 //                             SCOOTYPUFF v.2                                 //
 //                       "Who's ready for safe fun?"                          //
 //############################################################################//
 
-// Copyright 2016, Issac Merkle (issac@hexenring.net).
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with this program.  If not, see <http://www.gnu.org/licenses/>.
-//#############################################################################
 
-//Updated 09/06/2020 by Sam Wehner, Milligan Engineering
-//  Added more detailed comments 
-//
-//Updated 11/15/2020 by Tim Thacker, Milligan Engineering
-//  Set serial monitor outputs for acceleration and deceleration values
-//  Refined functionality for acceleration input
-//
-//##############################################################################
 // Arduino pin assignments
 
 #define SERIAL_OUT           11 //assigned to pin 11
@@ -53,7 +30,7 @@
 // The values in this section only can be modified to alter the behavior of the
 // individual ride-on toy.
 
-#define USE_ACCELERATION_POT  true
+#define USE_ACCELERATION_POT  true //If there is no installed acceleration potentiometer, set to 'false'
 
 
 
@@ -370,7 +347,11 @@ void update_acceleration(){
     Serial.println(acceleration);
     Serial.print( " deceleration: ");
     Serial.println(deceleration);
-    
+  }
+  
+  else{
+  acceleration = 1;
+  deceleration = acceleration * 2;
   }
 
 }
