@@ -224,6 +224,7 @@ void loop(){
 //PS4 DATA, WILL BE ALTERING
 Usb.Task();
 
+  /*
   if (PS4.connected()) {
     if (PS4.getAnalogHat(LeftHatX) > 137 || PS4.getAnalogHat(LeftHatX) < 117 || PS4.getAnalogHat(LeftHatY) > 137 || PS4.getAnalogHat(LeftHatY) < 117 || PS4.getAnalogHat(RightHatX) > 137 || PS4.getAnalogHat(RightHatX) < 117 || PS4.getAnalogHat(RightHatY) > 137 || PS4.getAnalogHat(RightHatY) < 117) {
       Serial.print(F("\r\nLeftHatX: "));
@@ -302,15 +303,20 @@ Usb.Task();
         Serial.print(F("\r\nTouchpad"));
         printTouch = !printTouch;
       }
+      */
 
-      if (printAngle) { // Print angle calculated using the accelerometer only
+      /*
+       if (printAngle) { // Print angle calculated using the accelerometer only
         Serial.print(F("\r\nPitch: "));
         Serial.print(PS4.getAngle(Pitch));
         Serial.print(F("\tRoll: "));
         Serial.print(PS4.getAngle(Roll));
       }
+      /*
 
-      if (printTouch) { // Print the x, y coordinates of the touchpad
+
+      /*
+       if (printTouch) { // Print the x, y coordinates of the touchpad
         if (PS4.isTouching(0) || PS4.isTouching(1)) // Print newline and carriage return if any of the fingers are touching the touchpad
           Serial.print(F("\r\n"));
         for (uint8_t i = 0; i < 2; i++) { // The touchpad track two fingers
@@ -322,10 +328,14 @@ Usb.Task();
             Serial.print(F("\t"));
           }
         }
-      }
+        
+      } 
+      
+
+      
     }
   }
-
+ */
  //############################################################################################### 
   digitalWrite(LED_HEARTBEAT,HIGH);
 
@@ -333,7 +343,11 @@ Usb.Task();
     update_acceleration();
     update_governor();
     update_trim();
-    read_buttons();
+    if (PS4.connected()){
+      read_wireless();
+      } else {
+      read_joystick();
+      }
   } else {
     pulse_estop_led();
   }
@@ -367,7 +381,7 @@ void pulse_estop_led(){
 
 //##############################################################################
 
-void read_buttons(){
+void read_joystick(){
 //Sending the button info to the motors to drive the jeep
   if (digitalRead(BTN_ESTOP) == LOW){
     do_estop();
@@ -383,6 +397,35 @@ void read_buttons(){
   } else if (digitalRead(BTN_RIGHT) == LOW) {
     do_right();
     engage_fun(BTN_RIGHT);
+  } else{
+    decelerate(&left_motor);
+    decelerate(&right_motor);
+  }
+
+}
+
+//##############################################################################
+
+void read_wireless(){
+//Reading information from the wireless controller to determine motor control
+  if (digitalRead(BTN_ESTOP) == LOW){
+    do_estop();
+  } else if (PS4.getAnalogHat(LeftHatY) < 117) {
+    do_forward();
+    engage_fun(BTN_FORWARD);
+    Serial.println("WIRELESS FORWARD");
+  } else if (PS4.getAnalogHat(LeftHatY) > 137) {
+    do_reverse();
+    engage_fun(BTN_REVERSE);
+    Serial.println("WIRELESS REVERSE");
+  } else if (PS4.getAnalogHat(RightHatX) < 117) {
+    do_left();
+    engage_fun(BTN_LEFT);
+    Serial.println("WIRELESS LEFT");
+  } else if (PS4.getAnalogHat(RightHatX) > 137) {
+    do_right();
+    engage_fun(BTN_RIGHT);
+    Serial.println("WIRELESS RIGHT");
   } else{
     decelerate(&left_motor);
     decelerate(&right_motor);
@@ -462,10 +505,10 @@ void update_trim(){
   int trim = map( raw_pot, 0, 1023, -(max_speed/4), (max_speed/4) );
 
   //Serial.println(raw_pot);
-  Serial.print( " max_speed: ");
-  Serial.print(max_speed);
-  Serial.print( " trim: ");
-  Serial.println(trim);
+  //Serial.print( " max_speed: ");
+  //Serial.print(max_speed);
+  //Serial.print( " trim: ");
+  //Serial.println(trim);
   
   if (trim > 0){
     left_motor.trim = 0;
@@ -484,10 +527,10 @@ void update_acceleration(){
   if (USE_ACCELERATION_POT){
     acceleration = map(analogRead(POT_ACCELERATION), 0, 1023, 1, (max_speed)/4 );
     deceleration = acceleration * 2;
-    Serial.print( " acceleration: ");
-    Serial.println(acceleration);
-    Serial.print( " deceleration: ");
-    Serial.println(deceleration);
+    //Serial.print( " acceleration: ");
+    //Serial.println(acceleration);
+    //Serial.print( " deceleration: ");
+    //Serial.println(deceleration);
   }
   
   else{
@@ -606,7 +649,7 @@ void tandem_accelerate(Direction direction){
 void do_forward(){
 
   tandem_accelerate(FORWARD);
-  Serial.println("DO FORWARD");
+  //Serial.println("DO FORWARD");
 
 }
 
@@ -615,7 +658,7 @@ void do_forward(){
 void do_reverse(){
 
   tandem_accelerate(REVERSE);
-  Serial.println("DO REVERSE");
+  //Serial.println("DO REVERSE");
 
 }
 
@@ -625,7 +668,7 @@ void do_left(){
 
   accelerate(&left_motor,REVERSE,acceleration);
   accelerate(&right_motor,FORWARD,acceleration);
-  Serial.println("DO LEFT");
+  //Serial.println("DO LEFT");
 
 }
 
@@ -635,7 +678,7 @@ void do_right(){
 
   accelerate(&left_motor,FORWARD,acceleration);
   accelerate(&right_motor,REVERSE,acceleration);
-  Serial.println("DO RIGHT");
+  //Serial.println("DO RIGHT");
 
 }
 
