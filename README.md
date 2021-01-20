@@ -24,9 +24,15 @@ PS4 Controller Options:
 
 -Emergency Stop: Hold L3+R3
 
+
+
+
 Controller Battery Charge Level Indication:
+
 Green: High charge
+
 Yellow: Medium charge
+
 Red: Low Charge
 
 
