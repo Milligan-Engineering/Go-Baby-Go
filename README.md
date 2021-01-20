@@ -13,9 +13,13 @@ You should have received a copy of the GNU General Public License along with thi
 This Arduino code is used to convert a PowerWheels Jeep into a vehicle useable by a variety of children with physical and motor disabilities. 
 
 PS4 Controller Options:
+
 -Dual Analog Joystick Steering: Default / Triangle
+
 -Single Finger Touchpad Steering: Circle
+
 -D-Pad Steering: Cross
+
 -On-board Joystick Steering: Square
 
 -Emergency Stop: Hold L3+R3
