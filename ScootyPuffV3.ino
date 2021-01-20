@@ -230,8 +230,11 @@ digitalWrite(LED_HEARTBEAT,HIGH);
     update_trim();
     batteryLevelIndicator();
     if (PS4.connected()){
-      read_wireless();
-      } else {
+      if(PS4.isTouching(0)){
+        read_touchpad();
+      } else{
+        read_wireless();
+      }} else {
       read_joystick();
       }
   } else {
@@ -622,7 +625,7 @@ void update_motor_controller(){
 //##############################################################################
   void batteryLevelIndicator(){
     int ds4Charge = PS4.getBatteryLevel();
-    Serial.println(ds4Charge);
+    //Serial.println(ds4Charge);
     if (ds4Charge > 8){
       PS4.setLed(Green);
     }
@@ -635,3 +638,41 @@ void update_motor_controller(){
   }
 
 //################################################################################
+
+void read_touchpad(){
+  /*
+   * Reading information from the wireless controller's touchpad to determine motor control, single finger only
+   * Touchpad reads the following:
+   * x-axis: 0-1919, left to right
+   * y-axis: 0-941, top to bottom
+   */
+  uint8_t touchPosition = 0;
+  /*
+  Serial.print(PS4.getX(touchPosition));
+  Serial.print(", ");
+  Serial.println(PS4.getY(touchPosition));
+   */
+  if (digitalRead(BTN_ESTOP) == LOW){
+    do_estop();
+  } else if (PS4.getY(touchPosition) < 470 && PS4.getX(touchPosition) > 640 && PS4.getX(touchPosition) < 1280) {
+    do_forward();
+    engage_fun(BTN_FORWARD);
+    Serial.println("TOUCHPAD FORWARD");
+  } else if (PS4.getY(touchPosition) > 470 && PS4.getX(touchPosition) > 640 && PS4.getX(touchPosition) < 1280) {
+    do_reverse();
+    engage_fun(BTN_REVERSE);
+    Serial.println("TOUCHPAD REVERSE");
+  } else if (PS4.getX(touchPosition) < 640) {
+    do_left();
+    engage_fun(BTN_LEFT);
+    Serial.println("TOUCHPAD LEFT");
+  } else if (PS4.getX(touchPosition) > 1280) {
+    do_right();
+    engage_fun(BTN_RIGHT);
+    Serial.println("TOUCHPAD RIGHT");
+  } else{
+    decelerate(&left_motor);
+    decelerate(&right_motor);
+  }
+
+}
