@@ -1,6 +1,7 @@
 # Go-Baby-Go: SCOOTYPUFF v.3
 Version 3
-For Milligan Engineering Go-Baby-Go Vehicles
+For Milligan Engineering Go-Baby-Go Vehicles.
+
 This Arduino code is used to convert a PowerWheels Jeep into a vehicle useable by a variety of children with physical and motor disabilities.
 
 Copyright And Licensure
