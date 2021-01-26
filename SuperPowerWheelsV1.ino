@@ -4,13 +4,18 @@
 //############################################################################//
 
 
-
 // Include libraries for PS4 Bluetooth and USB Host Shield Support
 #include <PS4BT.h>
 #include <usbhub.h>
-#include <PS4Parser.h>
 #include <SPI.h>
 #include <SoftwareSerial.h>
+
+
+/*  Edit the library file PS4Parser.cpp as following:
+ *  Add the following line of code to line 104:
+ *  lastMessageTime = (uint32_t)millis(); // Store the last message time
+ */
+
 
 USB Usb;
 //USBHub Hub1(&Usb); // Some dongles have a hub inside
@@ -21,10 +26,14 @@ BTD Btd(&Usb); // Create the Bluetooth Dongle instance
 // You will need to hold down the PS and Share button at the same time, the PS4 controller will then start to blink rapidly indicating that it is in pairing mode
 PS4BT PS4(&Btd, PAIR);
 
-
 // Arduino pin assignments
-#define SERIAL_OUT           8 
-#define SERIAL_IN            7
+  /*
+   * NOTE: Pins 13, 12, 11 are hardcoded for the USB Host Shield SPI Communication. They cannot be changed.
+   *       Pins 10, 9 are used SS and INT respectively. This can be changed in UsbCore.h 
+   *       typedef MAX3421e<P10, P9> MAX3421E;
+   */
+#define SERIAL_OUT            8 
+#define SERIAL_IN             7
 
 #define BTN_ESTOP             2
 #define BTN_FORWARD           4
@@ -37,11 +46,11 @@ PS4BT PS4(&Btd, PAIR);
 
 #define POT_TRIM             A2
 
-#define LED_HEARTBEAT        A4
-#define LED_ESTOP            A3
+#define LED_HEARTBEAT        A3
+#define LED_ESTOP            A4
 
-#define RELAY_FUN1            1
-#define RELAY_FUN2            0
+#define RELAY_FUN1            0
+#define RELAY_FUN2            1
 
 //##############################################################################
 // The values in this section only can be modified to alter the behavior of the
@@ -149,8 +158,6 @@ int controlSwitch = 0; //This value controlSwitch will control the Switch/Case f
 
 void setup(){
 
-  
-
   // configure Arduino pins to the pins that were listed when we used "#define" with the
   // variables in lines 27-44 at the beginning of the program
   
@@ -200,22 +207,34 @@ void setup(){
   Serial.begin(BAUD_RATE);
   soft_serial.begin(BAUD_RATE);
 
- //USB initialization / Controller Connection Setup
+// USB initialization / Controller Connection Setup
   Usb.Init();
+
 }
+
 //##############################################################################
 
 void loop(){
   digitalWrite(LED_HEARTBEAT,HIGH);
   Usb.Task();
-  
   if (estopped != true){
     update_acceleration();
     update_governor();
     update_trim();
     batteryLevelIndicator();
+//  disconnectFailsafe();
 
-    if (PS4.connected()){
+/*The following if statements control the switch function such that the following button presses enable the respective functions:
+ *    Wireless Control defaults to case 0: Dual Analog Joystick Steering
+ *    Circle: Touchpad Steering
+ *    Cross: D-Pad Steering
+ *    Square: On-Board Child Steering
+ *    Triangle: Dual Analog Joystick Steering
+ *    
+ *    L1+R1: Emergency Stop
+ */
+
+    if (PS4.connected() == true){
       if (PS4.getButtonClick(TRIANGLE)){
         controlSwitch = 0;
       }
@@ -228,7 +247,7 @@ void loop(){
       else if (PS4.getButtonClick(SQUARE)){
         controlSwitch = 3;
       }
-      else if (PS4.getButtonPress(L3) && PS4.getButtonPress(R3)){
+      else if (PS4.getButtonPress(L1) && PS4.getButtonPress(R1)){
         do_estop();
         Serial.println("WIRELESS ESTOP");
       }
@@ -242,12 +261,10 @@ void loop(){
                 break;
         case 3: read_joystick();
                 break;
-     }
-      } 
-     else {
+      }} else {
       read_joystick();
-    }
-    } else {
+      Serial.println("READ_JOYSTICK");
+    }} else {
     pulse_estop_led();
   }
 
@@ -255,7 +272,7 @@ void loop(){
   disengage_fun();
 
   digitalWrite(LED_HEARTBEAT,LOW);
-  //delay(LOOP_DELAY);
+  //delay(LOOP_DELAY);  //Lauszus recommends removal of loop delay as USB device needs to read every 1ms
 }
 
 //##############################################################################
@@ -625,19 +642,19 @@ void read_wireless(){
  */
   if (digitalRead(BTN_ESTOP) == LOW){
     do_estop();
-  } else if (PS4.getAnalogHat(LeftHatY) < 117) {
+  } else if (PS4.getAnalogHat(LeftHatY) < 97) {
     do_forward();
     engage_fun(BTN_FORWARD);
     Serial.println("WIRELESS FORWARD");
-  } else if (PS4.getAnalogHat(LeftHatY) > 137) {
+  } else if (PS4.getAnalogHat(LeftHatY) > 157) {
     do_reverse();
     engage_fun(BTN_REVERSE);
     Serial.println("WIRELESS REVERSE");
-  } else if (PS4.getAnalogHat(RightHatX) < 117) {
+  } else if (PS4.getAnalogHat(RightHatX) < 97) {
     do_left();
     engage_fun(BTN_LEFT);
     Serial.println("WIRELESS LEFT");
-  } else if (PS4.getAnalogHat(RightHatX) > 137) {
+  } else if (PS4.getAnalogHat(RightHatX) > 157) {
     do_right();
     engage_fun(BTN_RIGHT);
     Serial.println("WIRELESS RIGHT");
@@ -657,7 +674,7 @@ void read_touchpad(){
    * x-axis: 0-1919, left to right
    * y-axis: 0-941, top to bottom
    */
-  uint8_t touchPosition = 0;
+  uint8_t touchPosition;
   
   /*
    * //Uncomment this to test x/y coordinates returned by the touchpad
@@ -690,7 +707,7 @@ void read_touchpad(){
 }
 
 //################################################################################
- void read_dpad(){
+void read_dpad(){
   //Reading information from the d-pad to control vehicle
   //getButtonPress will return true as long as the button is held down
   if (digitalRead(BTN_ESTOP) == LOW){
@@ -716,3 +733,14 @@ void read_touchpad(){
     decelerate(&right_motor);
   }
 }
+
+//################################################################################
+//void disconnectFailsafe(){
+//  uint32_t connectionCheck = millis();
+//  if (connectionCheck - lastMessageTime > 50){
+//      left_motor.speed = 0;
+//      right_motor.speed = 0;
+//  }
+//}
+
+//################################################################################
