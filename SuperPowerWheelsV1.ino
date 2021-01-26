@@ -21,9 +21,10 @@ BTD Btd(&Usb); // Create the Bluetooth Dongle instance
 // You will need to hold down the PS and Share button at the same time, the PS4 controller will then start to blink rapidly indicating that it is in pairing mode
 PS4BT PS4(&Btd, PAIR);
 
+
 // Arduino pin assignments
-#define SERIAL_OUT           11 
-#define SERIAL_IN            10
+#define SERIAL_OUT           8 
+#define SERIAL_IN            7
 
 #define BTN_ESTOP             2
 #define BTN_FORWARD           4
@@ -36,11 +37,11 @@ PS4BT PS4(&Btd, PAIR);
 
 #define POT_TRIM             A2
 
-#define LED_HEARTBEAT        13
-#define LED_ESTOP             7
+#define LED_HEARTBEAT        A4
+#define LED_ESTOP            A3
 
-#define RELAY_FUN1            8
-#define RELAY_FUN2            9
+#define RELAY_FUN1            1
+#define RELAY_FUN2            0
 
 //##############################################################################
 // The values in this section only can be modified to alter the behavior of the
@@ -148,6 +149,8 @@ int controlSwitch = 0; //This value controlSwitch will control the Switch/Case f
 
 void setup(){
 
+  
+
   // configure Arduino pins to the pins that were listed when we used "#define" with the
   // variables in lines 27-44 at the beginning of the program
   
@@ -197,21 +200,19 @@ void setup(){
   Serial.begin(BAUD_RATE);
   soft_serial.begin(BAUD_RATE);
 
-// USB initialization / Controller Connection Setup
+ //USB initialization / Controller Connection Setup
   Usb.Init();
-
 }
-
 //##############################################################################
 
 void loop(){
   digitalWrite(LED_HEARTBEAT,HIGH);
+  Usb.Task();
   
   if (estopped != true){
     update_acceleration();
     update_governor();
     update_trim();
-    Usb.Task();
     batteryLevelIndicator();
 
     if (PS4.connected()){
@@ -241,9 +242,12 @@ void loop(){
                 break;
         case 3: read_joystick();
                 break;
-      }} else {
+     }
+      } 
+     else {
       read_joystick();
-    }} else {
+    }
+    } else {
     pulse_estop_led();
   }
 
@@ -251,7 +255,7 @@ void loop(){
   disengage_fun();
 
   digitalWrite(LED_HEARTBEAT,LOW);
-  delay(LOOP_DELAY);
+  //delay(LOOP_DELAY);
 }
 
 //##############################################################################
@@ -686,7 +690,7 @@ void read_touchpad(){
 }
 
 //################################################################################
-void read_dpad(){
+ void read_dpad(){
   //Reading information from the d-pad to control vehicle
   //getButtonPress will return true as long as the button is held down
   if (digitalRead(BTN_ESTOP) == LOW){
