@@ -10,7 +10,7 @@
 #include <SPI.h>
 #include <SoftwareSerial.h>
 
-
+//NOTE TO SELF
 /*  Edit the library file PS4Parser.cpp as following:
  *  Add the following line of code to line 104:
  *  lastMessageTime = (uint32_t)millis(); // Store the last message time
