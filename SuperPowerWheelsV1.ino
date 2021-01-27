@@ -10,12 +10,6 @@
 #include <SPI.h>
 #include <SoftwareSerial.h>
 
-//NOTE TO SELF
-/*  Edit the library file PS4Parser.cpp as following:
- *  Add the following line of code to line 104:
- *  lastMessageTime = (uint32_t)millis(); // Store the last message time
- */
-
 
 USB Usb;
 //USBHub Hub1(&Usb); // Some dongles have a hub inside
@@ -222,7 +216,13 @@ void loop(){
     update_governor();
     update_trim();
     batteryLevelIndicator();
-//  disconnectFailsafe();
+
+    if (PS4.connected()) {
+      if (millis() - PS4.getLastMessageTime() > 1000) {
+      Serial.println("Lost connection to PS4 controller");
+      PS4.setRumbleOn(RumbleHigh);
+      read_joystick();
+      } else {
 
 /*The following if statements control the switch function such that the following button presses enable the respective functions:
  *    Wireless Control defaults to case 0: Dual Analog Joystick Steering
@@ -233,9 +233,7 @@ void loop(){
  *    
  *    L1+R1: Emergency Stop
  */
-
-    if (PS4.connected() == true){
-      if (PS4.getButtonClick(TRIANGLE)){
+    if (PS4.getButtonClick(TRIANGLE)){
         controlSwitch = 0;
       }
       else if (PS4.getButtonClick(CIRCLE)){
@@ -261,7 +259,9 @@ void loop(){
                 break;
         case 3: read_joystick();
                 break;
-      }} else {
+      }
+  }
+} else {
       read_joystick();
       Serial.println("READ_JOYSTICK");
     }} else {
@@ -272,7 +272,6 @@ void loop(){
   disengage_fun();
 
   digitalWrite(LED_HEARTBEAT,LOW);
-  //delay(LOOP_DELAY);  //Lauszus recommends removal of loop delay as USB device needs to read every 1ms
 }
 
 //##############################################################################
@@ -733,14 +732,3 @@ void read_dpad(){
     decelerate(&right_motor);
   }
 }
-
-//################################################################################
-//void disconnectFailsafe(){
-//  uint32_t connectionCheck = millis();
-//  if (connectionCheck - lastMessageTime > 50){
-//      left_motor.speed = 0;
-//      right_motor.speed = 0;
-//  }
-//}
-
-//################################################################################
