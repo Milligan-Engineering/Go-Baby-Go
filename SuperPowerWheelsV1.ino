@@ -220,7 +220,7 @@ void loop(){
     if (PS4.connected()) {
       if (millis() - PS4.getLastMessageTime() > 1000) {
       Serial.println("Lost connection to PS4 controller");
-      PS4.setRumbleOn(RumbleHigh);
+      //PS4.setRumbleOn(RumbleHigh);
       read_joystick();
       } else {
 
@@ -263,7 +263,7 @@ void loop(){
   }
 } else {
       read_joystick();
-      Serial.println("READ_JOYSTICK");
+      //Serial.println("READ_JOYSTICK");
     }} else {
     pulse_estop_led();
   }
@@ -379,6 +379,7 @@ void disengage_fun(){
 //Updating govenor input
 void update_governor(){
   int raw_pot = analogRead(POT_GOVERNOR);//pot governor is PIN A0
+  Serial.println(analogRead(POT_GOVERNOR));
   max_speed = map( raw_pot, 0, 1024, 1, 63 );//map(value, fromLow, fromHigh, toLow, toHigh)
 }
 
@@ -413,10 +414,12 @@ void update_acceleration(){
   if (USE_ACCELERATION_POT){
     acceleration = map(analogRead(POT_ACCELERATION), 0, 1023, 1, (max_speed)/4 );
     deceleration = acceleration * 2;
+    //Serial.println(analogRead(POT_ACCELERATION));
     //Serial.print( " acceleration: ");
     //Serial.println(acceleration);
     //Serial.print( " deceleration: ");
     //Serial.println(deceleration);
+    //ACCELERATION POTENTIOMETER RANGE 1-14
   }
   
   else{
@@ -683,27 +686,28 @@ void read_touchpad(){
    */
   if (digitalRead(BTN_ESTOP) == LOW){
     do_estop();
-  } else if (PS4.getY(touchPosition) < 470 && PS4.getX(touchPosition) > 640 && PS4.getX(touchPosition) < 1280) {
-    do_forward();
-    engage_fun(BTN_FORWARD);
-    Serial.println("TOUCHPAD FORWARD");
-  } else if (PS4.getY(touchPosition) > 470 && PS4.getX(touchPosition) > 640 && PS4.getX(touchPosition) < 1280) {
-    do_reverse();
-    engage_fun(BTN_REVERSE);
-    Serial.println("TOUCHPAD REVERSE");
-  } else if (PS4.getX(touchPosition) < 640) {
-    do_left();
-    engage_fun(BTN_LEFT);
-    Serial.println("TOUCHPAD LEFT");
-  } else if (PS4.getX(touchPosition) > 1280) {
-    do_right();
-    engage_fun(BTN_RIGHT);
-    Serial.println("TOUCHPAD RIGHT");
-  } else{
+  }  else if (PS4.isTouching(0)){
+      if (PS4.getY(touchPosition) < 470 && PS4.getX(touchPosition) > 640 && PS4.getX(touchPosition) < 1280) {
+      do_forward();
+      engage_fun(BTN_FORWARD);
+      Serial.println("TOUCHPAD FORWARD");
+    } else if (PS4.getY(touchPosition) > 470 && PS4.getX(touchPosition) > 640 && PS4.getX(touchPosition) < 1280) {
+      do_reverse();
+      engage_fun(BTN_REVERSE);
+      Serial.println("TOUCHPAD REVERSE");
+    } else if (PS4.getX(touchPosition) < 640) {
+      do_left();
+      engage_fun(BTN_LEFT);
+      Serial.println("TOUCHPAD LEFT");
+    } else if (PS4.getX(touchPosition) > 1280) {
+      do_right();
+      engage_fun(BTN_RIGHT);
+      Serial.println("TOUCHPAD RIGHT");
+  }} else{
     decelerate(&left_motor);
     decelerate(&right_motor);
   }
-}
+  }
 
 //################################################################################
 void read_dpad(){
