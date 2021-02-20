@@ -12,6 +12,13 @@ You should have received a copy of the GNU General Public License along with thi
 ---------
 This Arduino code is used to convert a PowerWheels Jeep into a vehicle useable by a variety of children with physical and motor disabilities. 
 
+
+To pair the PS4 controller to the USB Host Shield via Bluetooth, press and hold Share + PS until the LED begins blinking rapidly. When it connects, it will turn to a solid color that indicates the battery level of the controller.
+
+To connect the PS4 controller to the Arduino after it has been paired, simply press the PS button. The LED will blink slowly as it connects.
+
+
+
 PS4 Controller Options:
 
 -Dual Analog Joystick Steering: Default / Triangle
@@ -22,7 +29,11 @@ PS4 Controller Options:
 
 -On-board Joystick Steering: Square
 
--Emergency Stop: Hold L3+R3
+-Emergency Stop: L1+R1
+
+-Reactive Vehicle after Emergency Stop: L2+R2
+
+-Manually Disconnect Controller: OPTIONS
 
 
 
