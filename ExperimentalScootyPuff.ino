@@ -20,6 +20,8 @@ BTD Btd(&Usb); // Create the Bluetooth Dongle instance
 // You will need to hold down the PS and Share button at the same time, the PS4 controller will then start to blink rapidly indicating that it is in pairing mode
 PS4BT PS4(&Btd, PAIR);
 
+
+
 // Arduino pin assignments
   /*
    * NOTE: Pins 13, 12, 11 are hardcoded for the USB Host Shield SPI Communication. They cannot be changed.
@@ -218,13 +220,17 @@ void loop(){
     update_acceleration();
     update_governor();
     update_trim();
-    batteryLevelIndicator();
+
 
     if (PS4.connected()) {
+     batteryLevelIndicator();
       if (millis() - PS4.getLastMessageTime() > 1000) {
-      Serial.println("Lost connection to PS4 controller");
-      //PS4.setRumbleOn(RumbleHigh);
-      read_joystick();
+        Serial.println("PS4 Connection Buffering");
+        read_joystick();
+        if (millis() - PS4.getLastMessageTime() > 30000){
+          Serial.println("PS4 Connection Lost - Controller Disconnected");
+          //PS4.disconnect();
+        }
       } else {
 
 /*The following if statements control the switch function such that the following button presses enable the respective functions:
@@ -251,6 +257,10 @@ void loop(){
       else if (PS4.getButtonPress(L1) && PS4.getButtonPress(R1)){
         do_estop();
         Serial.println("WIRELESS ESTOP");
+      }
+      else if (PS4.getButtonClick(OPTIONS)){
+        Serial.println("Controller Manually Disconnected");
+        PS4.disconnect();
       }
       switch(controlSwitch) {
         default:controlSwitch = 0;
@@ -285,6 +295,9 @@ void pulse_estop_led(){
   static byte estop_led_state = LOW;
   static unsigned long last_transition = millis();
 
+  decelerate(&left_motor);
+  decelerate(&right_motor);
+
   if (millis() - last_transition > ESTOP_LED_RATE){
     if (estop_led_state == HIGH){
       estop_led_state = LOW;
@@ -293,6 +306,13 @@ void pulse_estop_led(){
     };
     digitalWrite(LED_ESTOP,estop_led_state);
     last_transition = millis();
+  }
+
+  if (PS4.connected()){
+    if (PS4.getButtonPress(L2) && PS4.getButtonPress(R2)){
+      estopped = false;
+      Serial.println("Re-activate");
+    }
   }
 
 }
@@ -315,13 +335,13 @@ void read_joystick(){
   } else if (digitalRead(BTN_RIGHT) == LOW && digitalRead(BTN_FORWARD) == HIGH && digitalRead(BTN_REVERSE) == HIGH) {
     do_right();
     engage_fun(BTN_RIGHT);
-  } else if (digitalRead(BTN_FORWARD) == LOW && digitalRead(BTN_RIGHT) == LOW){
+  } else if (digitalRead(BTN_FORWARD) == LOW && digitalRead(BTN_RIGHT) == LOW && digitalRead(BTN_LEFT) == HIGH){
     do_forward_vector_right();
-  } else if (digitalRead(BTN_FORWARD) == LOW && digitalRead(BTN_LEFT) == LOW){
+  } else if (digitalRead(BTN_FORWARD) == LOW && digitalRead(BTN_LEFT) == LOW && digitalRead(BTN_RIGHT) == HIGH){
     do_forward_vector_left();
-  } else if (digitalRead(BTN_REVERSE) == LOW && digitalRead(BTN_RIGHT) == LOW){
+  } else if (digitalRead(BTN_REVERSE) == LOW && digitalRead(BTN_RIGHT) == LOW && digitalRead(BTN_LEFT) == HIGH){
     do_reverse_vector_right();
-  } else if (digitalRead(BTN_REVERSE) == LOW && digitalRead(BTN_LEFT) == LOW){
+  } else if (digitalRead(BTN_REVERSE) == LOW && digitalRead(BTN_LEFT) == LOW && digitalRead(BTN_RIGHT) == HIGH){
     do_reverse_vector_left();
   }else{
     decelerate(&left_motor);
@@ -390,7 +410,7 @@ void disengage_fun(){
 //Updating govenor input
 void update_governor(){
   int raw_pot = analogRead(POT_GOVERNOR);//pot governor is PIN A0
-  Serial.println(analogRead(POT_GOVERNOR));
+  //Serial.println(analogRead(POT_GOVERNOR));
   max_speed = map( raw_pot, 0, 1024, 1, 63 );//map(value, fromLow, fromHigh, toLow, toHigh)
 }
 
@@ -402,11 +422,11 @@ void update_trim(){
   int raw_pot = analogRead(POT_TRIM);
   int trim = map( raw_pot, 0, 1023, -(max_speed/4), (max_speed/4) );
 
-  //Serial.println(raw_pot);
-  //Serial.print( " max_speed: ");
-  //Serial.print(max_speed);
-  //Serial.print( " trim: ");
-  //Serial.println(trim);
+//  Serial.println(raw_pot);
+//  Serial.print( " max_speed: ");
+//  Serial.print(max_speed);
+//  Serial.print( " trim: ");
+//  Serial.println(trim);
   
   if (trim > 0){
     left_motor.trim = 0;
@@ -425,11 +445,11 @@ void update_acceleration(){
   if (USE_ACCELERATION_POT){
     acceleration = map(analogRead(POT_ACCELERATION), 0, 1023, 1, (max_speed)/4 );
     deceleration = acceleration * 2;
-    //Serial.println(analogRead(POT_ACCELERATION));
-    //Serial.print( " acceleration: ");
-    //Serial.println(acceleration);
-    //Serial.print( " deceleration: ");
-    //Serial.println(deceleration);
+//    Serial.println(analogRead(POT_ACCELERATION));
+//    Serial.print( " acceleration: ");
+//    Serial.println(acceleration);
+//    Serial.print( " deceleration: ");
+//    Serial.println(deceleration);
     //ACCELERATION POTENTIOMETER RANGE 1-14
   }
   
@@ -445,16 +465,21 @@ void update_acceleration(){
 
 void accelerate(Motor *motor, Direction direction, int amount){  //Amount == acceleration
 accelerationTimer = millis();
-if (accelerationTimer - previousIncrement >= accelerationInterval){
   // if we are accelerating [motor] in the [direction] it's already turning,
   // all we have to do is add [amount] to the speed
   if (motor->direction == direction){
+    //if (accelerationTimer - previousIncrement > accelerationInterval){
     motor->speed += amount;
+    //previousIncrement=millis();
+    //}
   // otherwise we're accelerating in the opposite direction from the motor's
   // current motion, in which case we'll reduce speed by [amount]
   // and, if we've crossed 0 speed into negative territory, reverse the motor
   } else {
+    //if (accelerationTimer - previousIncrement > accelerationInterval){
     motor->speed -= amount;
+    //previousIncrement=millis();
+    //}
     if (motor->speed < 0){
       motor->speed = abs(motor->speed);
       if (motor->direction == REVERSE){
@@ -465,10 +490,40 @@ if (accelerationTimer - previousIncrement >= accelerationInterval){
     }
   }
   govern_motor(motor);
-  previousIncrement = millis();
-}
 }
 
+
+
+//##############################################################################
+
+void vector_accelerate(Motor *motor, Direction direction, int amount){  //Amount == acceleration
+accelerationTimer = millis();
+  // if we are accelerating [motor] in the [direction] it's already turning,
+  // all we have to do is add [amount] to the speed
+  if (motor->direction == direction){
+    //if (accelerationTimer - previousIncrement > accelerationInterval){
+    motor->speed += amount;
+    //previousIncrement = millis();
+    //}
+  // otherwise we're accelerating in the opposite direction from the motor's
+  // current motion, in which case we'll reduce speed by [amount]
+  // and, if we've crossed 0 speed into negative territory, reverse the motor
+  } else {
+    //if (accelerationTimer - previousIncrement > accelerationInterval){
+    motor->speed -= amount;
+    //previousIncrement = millis();
+    //}
+    if (motor->speed < 0){
+      motor->speed = abs(motor->speed);
+      if (motor->direction == REVERSE){
+        motor->direction = FORWARD;
+      } else {
+        motor->direction = REVERSE;
+      }
+    }
+  }
+  vector_govern_motor(motor);
+}
 //##############################################################################
 
 void decelerate(Motor *motor){
@@ -492,17 +547,29 @@ void govern_motor(Motor *motor){
 }
 
 //##############################################################################
+//This was added such that the motor speed would be halved for the appropriate motor in vector steering
+void vector_govern_motor(Motor *motor){
+
+  if (motor->speed < 0){
+    motor->speed = 0;
+  } else if (motor->speed > max_speed/2){
+    motor->speed = max_speed/2;
+  }
+  
+}
+
+//##############################################################################
 
 void do_estop(){  //Emergency Stop
 
   estopped = true;
-  left_motor.speed = 0;
-  right_motor.speed = 0;
   decelerate(&left_motor);
   decelerate(&right_motor);
   govern_motor(&left_motor);
   govern_motor(&right_motor);
 }
+
+
 
 //##############################################################################
 
@@ -552,18 +619,22 @@ void tandem_accelerate(Direction direction){
 //##############################################################################
 
 void do_forward(){
-  accelerate(&left_motor,FORWARD,acceleration);
-  accelerate(&right_motor,REVERSE,acceleration);
-  //Serial.println("DO FORWARD");
+
+    accelerate(&left_motor,FORWARD,acceleration);
+    accelerate(&right_motor,REVERSE,acceleration);
+
+  Serial.println("FORWARD");
 
 }
 
 //##############################################################################
 
 void do_reverse(){
-  accelerate(&left_motor,REVERSE,acceleration);
-  accelerate(&right_motor,FORWARD,acceleration);
-  //Serial.println("DO REVERSE");
+
+    accelerate(&left_motor,REVERSE,acceleration);
+    accelerate(&right_motor,FORWARD,acceleration);
+
+  Serial.println("REVERSE");
 
 }
 
@@ -571,7 +642,7 @@ void do_reverse(){
 
 void do_left(){
   tandem_accelerate(FORWARD);
-  //Serial.println("DO LEFT");
+  Serial.println("LEFT");
 
 }
 
@@ -579,15 +650,15 @@ void do_left(){
 
 void do_right(){
   tandem_accelerate(REVERSE);
-  //Serial.println("DO RIGHT");
-
+  Serial.println("RIGHT");
+  
 }
 
 //##############################################################################
 
 void do_forward_vector_right(){
-   accelerate(&left_motor,REVERSE,acceleration);
-   accelerate(&right_motor,FORWARD,acceleration*(1/2));
+   vector_accelerate(&left_motor,FORWARD,acceleration);
+   accelerate(&right_motor,REVERSE,acceleration);
    Serial.println("+VECTOR RIGHT");
 
 }
@@ -596,8 +667,8 @@ void do_forward_vector_right(){
 
 void do_forward_vector_left(){
 
-  accelerate(&left_motor,REVERSE,acceleration*(1/2));
-  accelerate(&right_motor,FORWARD,acceleration);
+  accelerate(&left_motor,FORWARD,acceleration);
+  vector_accelerate(&right_motor,REVERSE,acceleration);
   Serial.println("+VECTOR LEFT");
 
 }
@@ -606,8 +677,8 @@ void do_forward_vector_left(){
 
 void do_reverse_vector_right(){
 
-  accelerate(&left_motor,REVERSE,acceleration);
-  accelerate(&right_motor,FORWARD,acceleration*(1/2));
+  vector_accelerate(&left_motor,REVERSE,acceleration);
+  accelerate(&right_motor,FORWARD,acceleration);
   Serial.println("-VECTOR RIGHT");
 
 }
@@ -616,8 +687,8 @@ void do_reverse_vector_right(){
 
 void do_reverse_vector_left(){
 
-  accelerate(&left_motor,REVERSE,acceleration*(1/2));
-  accelerate(&right_motor,FORWARD,acceleration);
+  accelerate(&left_motor,REVERSE,acceleration);
+  vector_accelerate(&right_motor,FORWARD,acceleration);
   Serial.println("-VECTOR LEFT");
 
 }
@@ -665,14 +736,14 @@ void update_motor_controller(){
 }
 
 //##############################################################################
-//This function will use the preset colors of green, yellow, and red to indicate battery charge level of the controller
+//This function will use the preset colors of green, yellow, and red to indicate battery charge level of the controller from 0-15
   void batteryLevelIndicator(){
     int ds4Charge = PS4.getBatteryLevel();
     //Serial.println(ds4Charge);
-    if (ds4Charge > 8){
+    if (ds4Charge >= 8){
       PS4.setLed(Green);
     }
-    else if(ds4Charge < 8 && ds4Charge > 4){
+    else if(ds4Charge < 8 && ds4Charge >= 4){
       PS4.setLed(Yellow);
     }
     else if(ds4Charge < 4){
@@ -690,29 +761,29 @@ void read_wireless(){
  */
   if (digitalRead(BTN_ESTOP) == LOW){
     do_estop();
-  } else if (PS4.getAnalogHat(LeftHatY) < 97 && PS4.getAnalogHat(RightHatX) > 97 && PS4.getAnalogHat(RightHatX) < 157) {
+  } else if (PS4.getAnalogHat(LeftHatY) < 98 && PS4.getAnalogHat(RightHatX) > 98 && PS4.getAnalogHat(RightHatX) < 158) {
     do_forward();
     engage_fun(BTN_FORWARD);
-    Serial.println("WIRELESS FORWARD");
-  } else if (PS4.getAnalogHat(LeftHatY) > 157 && PS4.getAnalogHat(RightHatX) > 97 && PS4.getAnalogHat(RightHatX) < 157) {
+    //Serial.println("WIRELESS FORWARD");
+  } else if (PS4.getAnalogHat(LeftHatY) > 158 && PS4.getAnalogHat(RightHatX) > 98 && PS4.getAnalogHat(RightHatX) < 158) {
     do_reverse();
     engage_fun(BTN_REVERSE);
-    Serial.println("WIRELESS REVERSE");
-  } else if (PS4.getAnalogHat(RightHatX) < 97 && PS4.getAnalogHat(LeftHatY) > 97 && PS4.getAnalogHat(LeftHatY) < 157) {
+    //Serial.println("WIRELESS REVERSE");
+  } else if (PS4.getAnalogHat(RightHatX) < 98 && PS4.getAnalogHat(LeftHatY) > 98 && PS4.getAnalogHat(LeftHatY) < 158) {
     do_left();
     engage_fun(BTN_LEFT);
-    Serial.println("WIRELESS LEFT");
-  } else if (PS4.getAnalogHat(RightHatX) > 157 && PS4.getAnalogHat(LeftHatY) > 97 && PS4.getAnalogHat(LeftHatY) < 157) {
+    //Serial.println("WIRELESS LEFT");
+  } else if (PS4.getAnalogHat(RightHatX) > 158 && PS4.getAnalogHat(LeftHatY) > 98 && PS4.getAnalogHat(LeftHatY) < 158) {
     do_right();
     engage_fun(BTN_RIGHT);
-    Serial.println("WIRELESS RIGHT");
-  } else if (PS4.getAnalogHat(LeftHatY) < 97 && PS4.getAnalogHat(RightHatX) > 157){
+    //Serial.println("WIRELESS RIGHT");
+  } else if (PS4.getAnalogHat(LeftHatY) < 98 && PS4.getAnalogHat(RightHatX) > 158){
     do_forward_vector_right();
-  } else if (PS4.getAnalogHat(LeftHatY) < 97 && PS4.getAnalogHat(RightHatX) < 97){
+  } else if (PS4.getAnalogHat(LeftHatY) < 98 && PS4.getAnalogHat(RightHatX) < 98){
     do_forward_vector_left();
-  } else if (PS4.getAnalogHat(LeftHatY) > 157 && PS4.getAnalogHat(RightHatX) > 157){
+  } else if (PS4.getAnalogHat(LeftHatY) > 158 && PS4.getAnalogHat(RightHatX) > 158){
     do_reverse_vector_right();
-  } else if (PS4.getAnalogHat(LeftHatY) < 97 && PS4.getAnalogHat(RightHatX) < 97){
+  } else if (PS4.getAnalogHat(LeftHatY) > 158 && PS4.getAnalogHat(RightHatX) < 98){
     do_reverse_vector_left();
   }else{
     decelerate(&left_motor);
@@ -744,33 +815,33 @@ void read_touchpad(){
       if (PS4.getY(touchPosition) < 470 && PS4.getX(touchPosition) > 640 && PS4.getX(touchPosition) < 1280) {
       do_forward();
       engage_fun(BTN_FORWARD);
-      Serial.println("TOUCHPAD FORWARD");
+      //Serial.println("TOUCHPAD FORWARD");
     } else if (PS4.getY(touchPosition) > 470 && PS4.getX(touchPosition) > 640 && PS4.getX(touchPosition) < 1280) {
       do_reverse();
       engage_fun(BTN_REVERSE);
-      Serial.println("TOUCHPAD REVERSE");
-    } else if (PS4.getX(touchPosition) < 640) {
+      //Serial.println("TOUCHPAD REVERSE");
+    } else if (PS4.getX(touchPosition) < 640 && PS4.getY(touchPosition) > 220 && PS4.getY(touchPosition) < 720) {
       do_left();
       engage_fun(BTN_LEFT);
-      Serial.println("TOUCHPAD LEFT");
-    } else if (PS4.getX(touchPosition) > 1280) {
+      //Serial.println("TOUCHPAD LEFT");
+    } else if (PS4.getX(touchPosition) > 1280 && PS4.getY(touchPosition) > 220 && PS4.getY(touchPosition) < 720) {
       do_right();
       engage_fun(BTN_RIGHT);
-      Serial.println("TOUCHPAD RIGHT");
-  } else if (PS4.getY(touchPosition) < 370 && PS4.getX(touchPosition) > 1280){
-    do_forward_vector_right();
-  } else if (PS4.getY(touchPosition) < 370 && PS4.getX(touchPosition) < 640){
-    do_forward_vector_left();
-  } else if (PS4.getY(touchPosition) > 570 && PS4.getX(touchPosition) > 1280){
-    do_reverse_vector_right();
-  } else if (PS4.getY(touchPosition) > 570 && PS4.getX(touchPosition) < 640){
-    do_reverse_vector_left();
-  }
-  } else{
-    decelerate(&left_motor);
-    decelerate(&right_motor);
-  }
-  }
+      //Serial.println("TOUCHPAD RIGHT");
+    } else if (PS4.getY(touchPosition) < 370 && PS4.getX(touchPosition) > 1280){
+      do_forward_vector_right();
+    } else if (PS4.getY(touchPosition) < 370 && PS4.getX(touchPosition) < 640){
+      do_forward_vector_left();
+    } else if (PS4.getY(touchPosition) > 570 && PS4.getX(touchPosition) > 1280){
+      do_reverse_vector_right();
+    } else if (PS4.getY(touchPosition) > 570 && PS4.getX(touchPosition) < 640){
+      do_reverse_vector_left();
+    }
+    } else{
+      decelerate(&left_motor);
+      decelerate(&right_motor);
+    }
+    }
 
 //################################################################################
 void read_dpad(){
@@ -781,19 +852,19 @@ void read_dpad(){
   } else if (PS4.getButtonPress(UP) && !PS4.getButtonPress(RIGHT) && !PS4.getButtonPress(LEFT)) {
     do_forward();
     engage_fun(BTN_FORWARD);
-    Serial.println("D-PAD FORWARD");
+    //Serial.println("D-PAD FORWARD");
   } else if (PS4.getButtonPress(DOWN) && !PS4.getButtonPress(RIGHT) && !PS4.getButtonPress(LEFT)) {
     do_reverse();
     engage_fun(BTN_REVERSE);
-    Serial.println("D-PAD REVERSE");
+    //Serial.println("D-PAD REVERSE");
   } else if (PS4.getButtonPress(LEFT) && !PS4.getButtonPress(UP) && !PS4.getButtonPress(DOWN)) {
     do_left();
     engage_fun(BTN_LEFT);
-    Serial.println("D-PAD LEFT");
+    //Serial.println("D-PAD LEFT");
   } else if (PS4.getButtonPress(RIGHT) && !PS4.getButtonPress(UP) && !PS4.getButtonPress(DOWN)) {
     do_right();
     engage_fun(BTN_RIGHT);
-    Serial.println("D-PAD RIGHT");
+    //Serial.println("D-PAD RIGHT");
   } else if (PS4.getButtonPress(UP) && PS4.getButtonPress(RIGHT)){
     do_forward_vector_right();
   } else if (PS4.getButtonPress(UP) && PS4.getButtonPress(LEFT)){
