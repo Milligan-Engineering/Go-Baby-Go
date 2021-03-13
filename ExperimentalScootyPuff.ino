@@ -5,6 +5,8 @@
 
 
 // Include libraries for PS4 Bluetooth and USB Host Shield Support
+
+
 #include <PS4BT.h>
 #include <usbhub.h>
 #include <SPI.h>
@@ -114,7 +116,9 @@ PS4BT PS4(&Btd, PAIR);
 #define LOOP_DELAY            10  // milliseconds
 
 //##############################################################################
-//#define USB_XFER_TIMEOUT 50
+//#define USB_XFER_TIMEOUT 50000
+//#define USB_RETRY_LIMIT 1000
+//#define USB_SETTLE_DELAY 200
 
 //##############################################################################
 
@@ -152,10 +156,23 @@ int controlSwitch = 0; //This value controlSwitch will control the Switch/Case f
 unsigned long accelerationTimer;
 unsigned long previousIncrement = 0;
 const unsigned long accelerationInterval = 250; //The time in milliseconds that must pass before void accelerate is called
+unsigned long priorityControlTimer = 0;
+const unsigned long priorityControlInterval = 5000; //The time in milliseconds that must pass before the control of the vehicle is automatically returned to the child
+
+
+
+int resetVal = A5;
 
 //##############################################################################
 
 void setup(){
+
+  digitalWrite(resetVal, HIGH);
+  delay(200); 
+  pinMode(resetVal, OUTPUT);
+  digitalWrite(resetVal, LOW);
+
+ 
 
   // configure Arduino pins to the pins that were listed when we used "#define" with the
   // variables in lines 27-44 at the beginning of the program
@@ -221,70 +238,28 @@ void loop(){
     update_governor();
     update_trim();
 
-
-    if (PS4.connected()) {
-     batteryLevelIndicator();
-      if (millis() - PS4.getLastMessageTime() > 1000) {
-        Serial.println("PS4 Connection Buffering");
-        read_joystick();
-        if (millis() - PS4.getLastMessageTime() > 30000){
-          Serial.println("PS4 Connection Lost - Controller Disconnected");
-          //PS4.disconnect();
+     if (PS4.connected()) {
+      batteryLevelIndicator(); //Update controller LED to indicate battery level
+      rangeRumbleIndicator();  //Rumble controller if connection time between controller and Arduino is too long
+      read_wireless();         //Dual-Analog Joystick Steering (WIRELESS)
+      read_dpad();             //D-Pad Steering (WIRELESS)
+//    read_touchpad();         //Touchpad Steering (WIRELESS)
+      wirelessEmergencyStop(); //Wireless Emergency Stop Function
+      wirelessOptions();       //Misc. Wireless Control Options
+      if ((millis() - priorityControlTimer) > priorityControlInterval){
+        read_joystick(); //If the time priorityControlInterval has passed since wireless input, control is returned to the child
+      }
+      
+     } else {
+            read_joystick();
+          }} else {
+          pulse_estop_led();
         }
-      } else {
-
-/*The following if statements control the switch function such that the following button presses enable the respective functions:
- *    Wireless Control defaults to case 0: Dual Analog Joystick Steering
- *    Circle: Touchpad Steering
- *    Cross: D-Pad Steering
- *    Square: On-Board Child Steering
- *    Triangle: Dual Analog Joystick Steering
- *    
- *    L1+R1: Emergency Stop
- */
-    if (PS4.getButtonClick(TRIANGLE)){
-        controlSwitch = 0;
-      }
-      else if (PS4.getButtonClick(CIRCLE)){
-        controlSwitch = 1;
-      }
-      else if (PS4.getButtonClick(CROSS)){
-        controlSwitch = 2;
-      }
-      else if (PS4.getButtonClick(SQUARE)){
-        controlSwitch = 3;
-      }
-      else if (PS4.getButtonPress(L1) && PS4.getButtonPress(R1)){
-        do_estop();
-        Serial.println("WIRELESS ESTOP");
-      }
-      else if (PS4.getButtonClick(OPTIONS)){
-        Serial.println("Controller Manually Disconnected");
-        PS4.disconnect();
-      }
-      switch(controlSwitch) {
-        default:controlSwitch = 0;
-        case 0: read_wireless();
-                break;
-        case 1: read_touchpad();
-                break;
-        case 2: read_dpad();
-                break;
-        case 3: read_joystick();
-                break;
-      }
-  }
-} else {
-      read_joystick();
-      //Serial.println("READ_JOYSTICK");
-    }} else {
-    pulse_estop_led();
-  }
-
-  update_motor_controller();
-  disengage_fun();
-
-  digitalWrite(LED_HEARTBEAT,LOW);
+      
+        update_motor_controller();
+        disengage_fun();
+      
+        digitalWrite(LED_HEARTBEAT,LOW);
 }
 
 //##############################################################################
@@ -311,6 +286,7 @@ void pulse_estop_led(){
   if (PS4.connected()){
     if (PS4.getButtonPress(L2) && PS4.getButtonPress(R2)){
       estopped = false;
+      priorityControlTimer = millis();
       Serial.println("Re-activate");
     }
   }
@@ -737,20 +713,51 @@ void update_motor_controller(){
 
 //##############################################################################
 //This function will use the preset colors of green, yellow, and red to indicate battery charge level of the controller from 0-15
-  void batteryLevelIndicator(){
+void batteryLevelIndicator(){
     int ds4Charge = PS4.getBatteryLevel();
     //Serial.println(ds4Charge);
-    if (ds4Charge >= 8){
+    if (ds4Charge >= 11){
       PS4.setLed(Green);
     }
-    else if(ds4Charge < 8 && ds4Charge >= 4){
+    else if(ds4Charge < 11 && ds4Charge >= 6){
       PS4.setLed(Yellow);
     }
-    else if(ds4Charge < 4){
+    else if(ds4Charge < 6){
       PS4.setLed(Red);
     }
   }
 
+//##############################################################################
+//This function will initiate various intensities of rumble depending on the magnitude of communication time between the Arduino and the PS4 controller
+void rangeRumbleIndicator(){
+     if ((millis() - PS4.getLastMessageTime()) > 50 && (millis() - PS4.getLastMessageTime()) < 500){
+        PS4.setRumbleOn(RumbleLow);
+      }else if ((millis() - PS4.getLastMessageTime()) > 500 && (millis() - PS4.getLastMessageTime()) < 1000){
+        PS4.setRumbleOn(RumbleHigh);
+      }else if (millis() - PS4.getLastMessageTime() > 1000) {
+      Serial.println("Lost connection to PS4 controller");
+      read_joystick();
+      }
+}
+
+//##############################################################################
+//This function defines the means by which the PS4 controller can trigger the emergency stop function.
+void wirelessEmergencyStop(){
+      if (PS4.getButtonPress(L1) && PS4.getButtonPress(R1)){
+        do_estop();
+        priorityControlTimer = millis();
+        Serial.println("WIRELESS ESTOP");
+      }
+}
+
+//##############################################################################
+//This function houses miscellaneous control options for the PS4 controller
+void wirelessOptions(){
+      if (PS4.getButtonClick(OPTIONS)){
+        Serial.println("Controller Manually Disconnected");
+        PS4.disconnect();
+      }
+}
 //##############################################################################
 
 void read_wireless(){
@@ -764,27 +771,35 @@ void read_wireless(){
   } else if (PS4.getAnalogHat(LeftHatY) < 98 && PS4.getAnalogHat(RightHatX) > 98 && PS4.getAnalogHat(RightHatX) < 158) {
     do_forward();
     engage_fun(BTN_FORWARD);
+    priorityControlTimer = millis();
     //Serial.println("WIRELESS FORWARD");
   } else if (PS4.getAnalogHat(LeftHatY) > 158 && PS4.getAnalogHat(RightHatX) > 98 && PS4.getAnalogHat(RightHatX) < 158) {
     do_reverse();
     engage_fun(BTN_REVERSE);
+    priorityControlTimer = millis();
     //Serial.println("WIRELESS REVERSE");
   } else if (PS4.getAnalogHat(RightHatX) < 98 && PS4.getAnalogHat(LeftHatY) > 98 && PS4.getAnalogHat(LeftHatY) < 158) {
     do_left();
     engage_fun(BTN_LEFT);
+    priorityControlTimer = millis();
     //Serial.println("WIRELESS LEFT");
   } else if (PS4.getAnalogHat(RightHatX) > 158 && PS4.getAnalogHat(LeftHatY) > 98 && PS4.getAnalogHat(LeftHatY) < 158) {
     do_right();
     engage_fun(BTN_RIGHT);
+    priorityControlTimer = millis();
     //Serial.println("WIRELESS RIGHT");
   } else if (PS4.getAnalogHat(LeftHatY) < 98 && PS4.getAnalogHat(RightHatX) > 158){
     do_forward_vector_right();
+    priorityControlTimer = millis();
   } else if (PS4.getAnalogHat(LeftHatY) < 98 && PS4.getAnalogHat(RightHatX) < 98){
     do_forward_vector_left();
+    priorityControlTimer = millis();
   } else if (PS4.getAnalogHat(LeftHatY) > 158 && PS4.getAnalogHat(RightHatX) > 158){
     do_reverse_vector_right();
+    priorityControlTimer = millis();
   } else if (PS4.getAnalogHat(LeftHatY) > 158 && PS4.getAnalogHat(RightHatX) < 98){
     do_reverse_vector_left();
+    priorityControlTimer = millis();
   }else{
     decelerate(&left_motor);
     decelerate(&right_motor);
@@ -794,54 +809,62 @@ void read_wireless(){
 
 //################################################################################
 
-void read_touchpad(){
-  /*
-   * Reading information from the wireless controller's touchpad to determine motor control, single finger only
-   * Touchpad reads the following:
-   * x-axis: 0-1919, left to right
-   * y-axis: 0-941, top to bottom
-   */
-  uint8_t touchPosition;
-  
-  /*
-   * //Uncomment this to test x/y coordinates returned by the touchpad
-  Serial.print(PS4.getX(touchPosition));
-  Serial.print(", ");
-  Serial.println(PS4.getY(touchPosition));
-   */
-  if (digitalRead(BTN_ESTOP) == LOW){
-    do_estop();
-  }  else if (PS4.isTouching(0) || PS4.isTouching(1)){
-      if (PS4.getY(touchPosition) < 470 && PS4.getX(touchPosition) > 640 && PS4.getX(touchPosition) < 1280) {
-      do_forward();
-      engage_fun(BTN_FORWARD);
-      //Serial.println("TOUCHPAD FORWARD");
-    } else if (PS4.getY(touchPosition) > 470 && PS4.getX(touchPosition) > 640 && PS4.getX(touchPosition) < 1280) {
-      do_reverse();
-      engage_fun(BTN_REVERSE);
-      //Serial.println("TOUCHPAD REVERSE");
-    } else if (PS4.getX(touchPosition) < 640 && PS4.getY(touchPosition) > 220 && PS4.getY(touchPosition) < 720) {
-      do_left();
-      engage_fun(BTN_LEFT);
-      //Serial.println("TOUCHPAD LEFT");
-    } else if (PS4.getX(touchPosition) > 1280 && PS4.getY(touchPosition) > 220 && PS4.getY(touchPosition) < 720) {
-      do_right();
-      engage_fun(BTN_RIGHT);
-      //Serial.println("TOUCHPAD RIGHT");
-    } else if (PS4.getY(touchPosition) < 370 && PS4.getX(touchPosition) > 1280){
-      do_forward_vector_right();
-    } else if (PS4.getY(touchPosition) < 370 && PS4.getX(touchPosition) < 640){
-      do_forward_vector_left();
-    } else if (PS4.getY(touchPosition) > 570 && PS4.getX(touchPosition) > 1280){
-      do_reverse_vector_right();
-    } else if (PS4.getY(touchPosition) > 570 && PS4.getX(touchPosition) < 640){
-      do_reverse_vector_left();
-    }
-    } else{
-      decelerate(&left_motor);
-      decelerate(&right_motor);
-    }
-    }
+//void read_touchpad(){
+//  /*
+//   * Reading information from the wireless controller's touchpad to determine motor control, single finger only
+//   * Touchpad reads the following:
+//   * x-axis: 0-1919, left to right
+//   * y-axis: 0-941, top to bottom
+//   */
+//  uint8_t touchPosition;
+//  
+//  /*
+//   * //Uncomment this to test x/y coordinates returned by the touchpad
+//  Serial.print(PS4.getX(touchPosition));
+//  Serial.print(", ");
+//  Serial.println(PS4.getY(touchPosition));
+//   */
+//  if (digitalRead(BTN_ESTOP) == LOW){
+//    do_estop();
+//  }  else if (PS4.isTouching(0) || PS4.isTouching(1)){
+//      if (PS4.getY(touchPosition) < 470 && PS4.getX(touchPosition) > 640 && PS4.getX(touchPosition) < 1280) {
+//      do_forward();
+//      engage_fun(BTN_FORWARD);
+//      priorityControlTimer = millis();
+//      //Serial.println("TOUCHPAD FORWARD");
+//    } else if (PS4.getY(touchPosition) > 470 && PS4.getX(touchPosition) > 640 && PS4.getX(touchPosition) < 1280) {
+//      do_reverse();
+//      engage_fun(BTN_REVERSE);
+//      priorityControlTimer = millis();
+//      //Serial.println("TOUCHPAD REVERSE");
+//    } else if (PS4.getX(touchPosition) < 640 && PS4.getY(touchPosition) > 220 && PS4.getY(touchPosition) < 720) {
+//      do_left();
+//      engage_fun(BTN_LEFT);
+//      priorityControlTimer = millis();
+//      //Serial.println("TOUCHPAD LEFT");
+//    } else if (PS4.getX(touchPosition) > 1280 && PS4.getY(touchPosition) > 220 && PS4.getY(touchPosition) < 720) {
+//      do_right();
+//      engage_fun(BTN_RIGHT);
+//      priorityControlTimer = millis();
+//      //Serial.println("TOUCHPAD RIGHT");
+//    } else if (PS4.getY(touchPosition) < 370 && PS4.getX(touchPosition) > 1280){
+//      do_forward_vector_right();
+//      priorityControlTimer = millis();
+//    } else if (PS4.getY(touchPosition) < 370 && PS4.getX(touchPosition) < 640){
+//      do_forward_vector_left();
+//      priorityControlTimer = millis();
+//    } else if (PS4.getY(touchPosition) > 570 && PS4.getX(touchPosition) > 1280){
+//      do_reverse_vector_right();
+//      priorityControlTimer = millis();
+//    } else if (PS4.getY(touchPosition) > 570 && PS4.getX(touchPosition) < 640){
+//      do_reverse_vector_left();
+//      priorityControlTimer = millis();
+//    }
+//    } else{
+//      decelerate(&left_motor);
+//      decelerate(&right_motor);
+//    }
+//    }
 
 //################################################################################
 void read_dpad(){
@@ -852,27 +875,35 @@ void read_dpad(){
   } else if (PS4.getButtonPress(UP) && !PS4.getButtonPress(RIGHT) && !PS4.getButtonPress(LEFT)) {
     do_forward();
     engage_fun(BTN_FORWARD);
+    priorityControlTimer = millis();
     //Serial.println("D-PAD FORWARD");
   } else if (PS4.getButtonPress(DOWN) && !PS4.getButtonPress(RIGHT) && !PS4.getButtonPress(LEFT)) {
     do_reverse();
     engage_fun(BTN_REVERSE);
+    priorityControlTimer = millis();
     //Serial.println("D-PAD REVERSE");
   } else if (PS4.getButtonPress(LEFT) && !PS4.getButtonPress(UP) && !PS4.getButtonPress(DOWN)) {
     do_left();
     engage_fun(BTN_LEFT);
+    priorityControlTimer = millis();
     //Serial.println("D-PAD LEFT");
   } else if (PS4.getButtonPress(RIGHT) && !PS4.getButtonPress(UP) && !PS4.getButtonPress(DOWN)) {
     do_right();
     engage_fun(BTN_RIGHT);
+    priorityControlTimer = millis();
     //Serial.println("D-PAD RIGHT");
   } else if (PS4.getButtonPress(UP) && PS4.getButtonPress(RIGHT)){
     do_forward_vector_right();
+    priorityControlTimer = millis();
   } else if (PS4.getButtonPress(UP) && PS4.getButtonPress(LEFT)){
     do_forward_vector_left();
+    priorityControlTimer = millis();
   } else if (PS4.getButtonPress(DOWN) && PS4.getButtonPress(RIGHT)){
     do_reverse_vector_right();
+    priorityControlTimer = millis();
   } else if (PS4.getButtonPress(DOWN) && PS4.getButtonPress(LEFT)){
     do_reverse_vector_left();
+    priorityControlTimer = millis();
   }
   else{
     decelerate(&left_motor);
