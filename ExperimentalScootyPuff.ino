@@ -143,6 +143,8 @@ typedef struct {  //defining a Relay "structure" using the "struct" command in C
 // global variables
 SoftwareSerial soft_serial(SERIAL_IN,SERIAL_OUT);
 bool estopped; //
+bool dpadInput;
+bool dualAnalogInput;
 byte max_speed; //"byte" means max_speed will be any number 0->255
 byte acceleration = BASE_ACCELERATION;
 byte deceleration = BASE_DECELERATION;
@@ -157,6 +159,8 @@ unsigned long accelerationTimer;
 unsigned long previousIncrement = 0;
 const unsigned long accelerationInterval = 250; //The time in milliseconds that must pass before void accelerate is called
 unsigned long priorityControlTimer = 0;
+unsigned long lastDpadInput = 0;
+unsigned long lastDualAnalogInput = 0;
 const unsigned long priorityControlInterval = 5000; //The time in milliseconds that must pass before the control of the vehicle is automatically returned to the child
 
 
@@ -202,6 +206,8 @@ void setup(){
 
 // initialize global variables
   estopped = false;
+  dpadInput = false;
+  dualAnalogInput = false;
 // initializing start-up/default values
   left_motor.name = "L";
   right_motor.name = "R";
@@ -241,13 +247,21 @@ void loop(){
      if (PS4.connected()) {
       batteryLevelIndicator(); //Update controller LED to indicate battery level
       rangeRumbleIndicator();  //Rumble controller if connection time between controller and Arduino is too long
+      update_wirelessInputBooleans();
+
+      if (dpadInput != true){
       read_wireless();         //Dual-Analog Joystick Steering (WIRELESS)
+      }
+      if (dualAnalogInput != true){
       read_dpad();             //D-Pad Steering (WIRELESS)
+      }
+      
 //    read_touchpad();         //Touchpad Steering (WIRELESS)
       wirelessEmergencyStop(); //Wireless Emergency Stop Function
       wirelessOptions();       //Misc. Wireless Control Options
       if ((millis() - priorityControlTimer) > priorityControlInterval){
         read_joystick(); //If the time priorityControlInterval has passed since wireless input, control is returned to the child
+        Serial.println("Timeout Child Control");
       }
       
      } else {
@@ -712,6 +726,21 @@ void update_motor_controller(){
 }
 
 //##############################################################################
+
+void update_wirelessInputBooleans(){
+
+if (millis() - lastDualAnalogInput > 1000){
+  dualAnalogInput = false;
+}
+
+if (millis() - lastDpadInput > 1000){
+  dpadInput = false;
+}
+}
+
+//##############################################################################
+
+
 //This function will use the preset colors of green, yellow, and red to indicate battery charge level of the controller from 0-15
 void batteryLevelIndicator(){
     int ds4Charge = PS4.getBatteryLevel();
@@ -772,34 +801,50 @@ void read_wireless(){
     do_forward();
     engage_fun(BTN_FORWARD);
     priorityControlTimer = millis();
+    lastDualAnalogInput = millis();
+    dualAnalogInput = true;
     //Serial.println("WIRELESS FORWARD");
   } else if (PS4.getAnalogHat(LeftHatY) > 158 && PS4.getAnalogHat(RightHatX) > 98 && PS4.getAnalogHat(RightHatX) < 158) {
     do_reverse();
     engage_fun(BTN_REVERSE);
     priorityControlTimer = millis();
+    lastDualAnalogInput = millis();
+    dualAnalogInput = true;
     //Serial.println("WIRELESS REVERSE");
   } else if (PS4.getAnalogHat(RightHatX) < 98 && PS4.getAnalogHat(LeftHatY) > 98 && PS4.getAnalogHat(LeftHatY) < 158) {
     do_left();
     engage_fun(BTN_LEFT);
     priorityControlTimer = millis();
+    lastDualAnalogInput = millis();
+    dualAnalogInput = true;
     //Serial.println("WIRELESS LEFT");
   } else if (PS4.getAnalogHat(RightHatX) > 158 && PS4.getAnalogHat(LeftHatY) > 98 && PS4.getAnalogHat(LeftHatY) < 158) {
     do_right();
     engage_fun(BTN_RIGHT);
     priorityControlTimer = millis();
+    lastDualAnalogInput = millis();
+    dualAnalogInput = true;
     //Serial.println("WIRELESS RIGHT");
   } else if (PS4.getAnalogHat(LeftHatY) < 98 && PS4.getAnalogHat(RightHatX) > 158){
     do_forward_vector_right();
     priorityControlTimer = millis();
+    lastDualAnalogInput = millis();
+    dualAnalogInput = true;
   } else if (PS4.getAnalogHat(LeftHatY) < 98 && PS4.getAnalogHat(RightHatX) < 98){
     do_forward_vector_left();
     priorityControlTimer = millis();
+    lastDualAnalogInput = millis();
+    dualAnalogInput = true;
   } else if (PS4.getAnalogHat(LeftHatY) > 158 && PS4.getAnalogHat(RightHatX) > 158){
     do_reverse_vector_right();
     priorityControlTimer = millis();
+    lastDualAnalogInput = millis();
+    dualAnalogInput = true;
   } else if (PS4.getAnalogHat(LeftHatY) > 158 && PS4.getAnalogHat(RightHatX) < 98){
     do_reverse_vector_left();
     priorityControlTimer = millis();
+    lastDualAnalogInput = millis();
+    dualAnalogInput = true;
   }else{
     decelerate(&left_motor);
     decelerate(&right_motor);
@@ -876,34 +921,50 @@ void read_dpad(){
     do_forward();
     engage_fun(BTN_FORWARD);
     priorityControlTimer = millis();
+    lastDpadInput = millis();
+    dpadInput = true;
     //Serial.println("D-PAD FORWARD");
   } else if (PS4.getButtonPress(DOWN) && !PS4.getButtonPress(RIGHT) && !PS4.getButtonPress(LEFT)) {
     do_reverse();
     engage_fun(BTN_REVERSE);
     priorityControlTimer = millis();
+    lastDpadInput = millis();
+    dpadInput = true;
     //Serial.println("D-PAD REVERSE");
   } else if (PS4.getButtonPress(LEFT) && !PS4.getButtonPress(UP) && !PS4.getButtonPress(DOWN)) {
     do_left();
     engage_fun(BTN_LEFT);
     priorityControlTimer = millis();
+    lastDpadInput = millis();
+    dpadInput = true;
     //Serial.println("D-PAD LEFT");
   } else if (PS4.getButtonPress(RIGHT) && !PS4.getButtonPress(UP) && !PS4.getButtonPress(DOWN)) {
     do_right();
     engage_fun(BTN_RIGHT);
     priorityControlTimer = millis();
+    lastDpadInput = millis();
+    dpadInput = true;
     //Serial.println("D-PAD RIGHT");
   } else if (PS4.getButtonPress(UP) && PS4.getButtonPress(RIGHT)){
     do_forward_vector_right();
     priorityControlTimer = millis();
+    lastDpadInput = millis();
+    dpadInput = true;
   } else if (PS4.getButtonPress(UP) && PS4.getButtonPress(LEFT)){
     do_forward_vector_left();
     priorityControlTimer = millis();
+    lastDpadInput = millis();
+    dpadInput = true;
   } else if (PS4.getButtonPress(DOWN) && PS4.getButtonPress(RIGHT)){
     do_reverse_vector_right();
     priorityControlTimer = millis();
+    lastDpadInput = millis();
+    dpadInput = true;
   } else if (PS4.getButtonPress(DOWN) && PS4.getButtonPress(LEFT)){
     do_reverse_vector_left();
     priorityControlTimer = millis();
+    lastDpadInput = millis();
+    dpadInput = true;
   }
   else{
     decelerate(&left_motor);
