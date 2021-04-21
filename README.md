@@ -1,3 +1,21 @@
+# SuperPowerWheels v.1
+Version 1
+For Milligan Engineering Go-Baby-Go Phase 02 Vehicles - Wireless Control
+
+This Arduino code is used to convert a PowerWheels Jeep into a vehicle useable by a variety of children with physical and motor disabilities, including new features such as time-bounded acceleration, 8-directional steering, wireless control via dual-analog joysticks and D-pad, seamless priority control transitions, and more.
+
+
+
+
+
+
+
+
+
+
+
+
+
 # Go-Baby-Go: SCOOTYPUFF v.3
 Version 3
 For Milligan Engineering Go-Baby-Go Vehicles.
